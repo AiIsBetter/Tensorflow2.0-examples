@@ -13,6 +13,8 @@ from sklearn.preprocessing import LabelEncoder
 # sys import
 import math
 import time
+import json
+import gc
 from contextlib import contextmanager
 
 
@@ -55,77 +57,159 @@ def convert_to_tfrecord(types_dict,value):
     )
 def main(path=None, save_path = None,debug=True):
     label_dict = {}
+    label_len_dict = {}
+    with timer("train label dict process"):
+        print("train label dict process start ")
+        data = pd.read_csv(path, chunksize=1000000)
+        count = 0
+        for chunk in data:
+            print(count)
+            for fea in chunk.columns:
+                types = str(chunk[fea].dtype)
+                if fea == 'MachineIdentifier':
+                    continue
+                if types != 'object' and types != 'category':
+                    chunk[fea] = chunk[fea].fillna(-1)
+                    chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                    if fea not in label_dict:
+                        tmp = list(chunk[fea].unique())
+                        label_dict[fea] = tmp
+                        label_len_dict[fea] = list(range(len(tmp)))
+                    else:
+                        tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
+                        label_dict[fea] = label_dict[fea] + tmp
+                        label_len_dict[fea] = label_len_dict[fea] + list(range(len(label_len_dict[fea]),len(label_len_dict[fea])+len(tmp)))
+                else:
+                    chunk[fea] = chunk[fea].fillna('-1')
+                    if fea not in label_dict:
+                        tmp = list(chunk[fea].unique())
+                        label_dict[fea] = tmp
+                        label_len_dict[fea] = list(range(len(tmp)))
+                    else:
+                        tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
+                        label_dict[fea] = label_dict[fea] + tmp
+                        label_len_dict[fea] = label_len_dict[fea] + list(range(len(label_len_dict[fea]),len(label_len_dict[fea])+len(tmp)))
+        del data
+        gc.collect()
     with timer("train data process"):
-            data = pd.read_csv(path,chunksize=1000)
+        print("train data process start ")
+        data = pd.read_csv(path,chunksize=100000)
+        count = 0
+        with tf.io.TFRecordWriter(save_path) as w:
+            for chunk in data:
+                print(count)
+                types_dict = {}
+                for fea in chunk.columns:
+                    if fea == 'MachineIdentifier':
+                        types = str(chunk[fea].dtype)
+                        types_dict[fea] = types
+                        continue
+                    types = str(chunk[fea].dtype)
+                    if types !='object' and types !='category':
+                        chunk[fea] = chunk[fea].fillna(-1)
+                        chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                        chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
+                        types = str(chunk[fea].dtype)
+                        types_dict[fea] = types
+                    else:
+                        chunk[fea] = chunk[fea].fillna('-1')
+                        chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea],label_len_dict[fea])))
+                        types = str(chunk[fea].dtype)
+                        types_dict[fea] = types
+
+                for row in chunk.iterrows():
+                    tmp = dict(row[1])
+                    # Parse each csv row to TF Example using the above functions.
+                    example = convert_to_tfrecord(types_dict,tmp)
+                    # Serialize each TF Example to string, and write to TFRecord file.
+                    w.write(example.SerializeToString())
+                count +=1
+    # with open('../data/decode.txt','w') as f:
+    #     # for i in types_dict.keys():
+    #     #     f.writelines(i+','+types_dict[i]+'\n')
+
+
+    with timer("test label dict process"):
+        print("test label dict process start ")
+        data = pd.read_csv(test_path, chunksize=100000)
+        count = 0
+        for chunk in data:
+            print(count)
+            for fea in chunk.columns:
+                types = str(chunk[fea].dtype)
+                if fea == 'MachineIdentifier':
+                    continue
+                if types != 'object' and types != 'category':
+                    chunk[fea] = chunk[fea].fillna(-1)
+                    chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                    tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
+                    label_dict[fea] = label_dict[fea] + tmp
+                    label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
+                else:
+                    chunk[fea] = chunk[fea].fillna('-1')
+                    tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
+                    label_dict[fea] = label_dict[fea] + tmp
+                    label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
+
+        json_dump = json.dumps(types_dict)
+        fileObject = open(root_path + 'types_dict.json', 'w')
+        fileObject.write(json_dump)
+        fileObject.close()
+
+        for i in label_dict.keys():
+            if not isinstance(label_dict[i][0], str):
+                label_dict[i] = [int(j) for j in label_dict[i]]
+        json_dump = json.dumps(label_dict)
+        fileObject = open(root_path + 'label_dict.json', 'w')
+        fileObject.write(json_dump)
+        fileObject.close()
+
+        for i in label_len_dict.keys():
+            if not isinstance(label_len_dict[i][0], str):
+                label_len_dict[i] = [int(j) for j in label_len_dict[i]]
+        json_dump = json.dumps(label_len_dict)
+        fileObject = open(root_path + 'label_len_dict.json', 'w')
+        fileObject.write(json_dump)
+        fileObject.close()
+
+        del data
+        gc.collect()
+        with timer("test data process"):
+            print("test data process start ")
+            data = pd.read_csv(test_path, chunksize=100000)
             count = 0
-            def hash_encode(x):
-                return hash(x)
-            with tf.io.TFRecordWriter(save_path) as w:
+            with tf.io.TFRecordWriter(save_test_path) as w:
                 for chunk in data:
                     print(count)
-                    types_dict = {}
                     for fea in chunk.columns:
-                        types= str(chunk[fea].dtype)
-                        if types !='object' and types !='category':
-                            if fea not in label_dict:
-                                label_dict[fea] = list(chunk[fea].unique())
-                            else:
-                                label_dict[fea] = label_dict[fea]+list(chunk[~chunk[fea].isin(label_dict[fea])][fea])
+                        if fea == 'MachineIdentifier':
+                            types = str(chunk[fea].dtype)
+
+                            continue
+                        types = str(chunk[fea].dtype)
+                        if types != 'object' and types != 'category':
                             chunk[fea] = chunk[fea].fillna(-1)
-                            # if 'float' in types:
-                            #     chunk[fea] = chunk[fea].apply(lambda x:int(math.log(1 + x * x))).astype(np.float32)
-                            # else:
                             chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
-                            types_dict[fea] = types
+                            chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
                         else:
                             chunk[fea] = chunk[fea].fillna('-1')
-                            types_dict[fea] = types
+                            chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
 
                     for row in chunk.iterrows():
                         tmp = dict(row[1])
                         # Parse each csv row to TF Example using the above functions.
-                        example = convert_to_tfrecord(types_dict,tmp)
+                        example = convert_to_tfrecord(types_dict, tmp)
                         # Serialize each TF Example to string, and write to TFRecord file.
                         w.write(example.SerializeToString())
-                    count +=1
-    with open('../data/decode.txt','w') as f:
-        for i in types_dict.keys():
-            f.writelines(i+','+types_dict[i]+'\n')
-    with timer("test data process"):
-            data = pd.read_csv(path,chunksize=100000)
-            count = 0
-            def hash_encode(x):
-                return hash(x)
-            with tf.io.TFRecordWriter(save_path) as w:
-                for chunk in data:
-                    print(count)
-                    types_dict = {}
-
-                    for fea in chunk.columns:
-                        types= str(chunk[fea].dtype)
-                        if types !='object' and types !='category':
-                            chunk[fea] = chunk[fea].fillna(-1)
-                            # if 'float' in types:
-                            #     chunk[fea] = chunk[fea].apply(lambda x:int(math.log(1 + x * x))).astype(np.float32)
-                            # else:
-                            chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
-                            types_dict[fea] = types
-                        else:
-                            chunk[fea] = chunk[fea].fillna('-1')
-                            types_dict[fea] = types
-
-                    for row in chunk.iterrows():
-                        tmp = dict(row[1])
-                        # Parse each csv row to TF Example using the above functions.
-                        example = convert_to_tfrecord(types_dict,tmp)
-                        # Serialize each TF Example to string, and write to TFRecord file.
-                        w.write(example.SerializeToString())
-                    count +=1
+                    count += 1
 
 
 
 if __name__ == "__main__":
-    path = '../data/train_sample.csv'
-    save_path = '../data/train_sample.tfrecord'
+    root_path = '../data/'
+    path = root_path+'train_sample.csv'
+    test_path = root_path + 'test_sample.csv'
+    save_path = root_path + 'train_sample.tfrecord'
+    save_test_path = root_path + 'test_sample.tfrecord'
     with timer("Full feature select run"):
         main(path=path,save_path=save_path, debug=True)
