@@ -56,9 +56,11 @@ def convert_to_tfrecord(types_dict,value):
             feature=features)
     )
 def main(path=None, save_path = None,debug=True):
+    # 该词典只存入要处理的特征，不存入MachineIdentifier id列和HasDetections label列
     label_dict = {}
     label_len_dict = {}
     with timer("train label dict process"):
+        # 该模块用来对所有特征列统计特征值，在下个模块用这些获取的字典来进行labelencode
         print("train label dict process start ")
         data = pd.read_csv(path, chunksize=1000000)
         count = 0
@@ -66,7 +68,7 @@ def main(path=None, save_path = None,debug=True):
             print(count)
             for fea in chunk.columns:
                 types = str(chunk[fea].dtype)
-                if fea == 'MachineIdentifier':
+                if fea == 'MachineIdentifier' or fea == 'HasDetections':
                     continue
                 if types != 'object' and types != 'category':
                     chunk[fea] = chunk[fea].fillna(-1)
@@ -92,15 +94,17 @@ def main(path=None, save_path = None,debug=True):
         del data
         gc.collect()
     with timer("train data process"):
+        # 所有特征列做labelencode，使用map函数，没有使用labelencode函数，
         print("train data process start ")
         data = pd.read_csv(path,chunksize=100000)
         count = 0
         with tf.io.TFRecordWriter(save_path) as w:
             for chunk in data:
                 print(count)
+                # 该词典存入所有列，用来存入所有列到tfrecord里面
                 types_dict = {}
                 for fea in chunk.columns:
-                    if fea == 'MachineIdentifier':
+                    if fea == 'MachineIdentifier' or fea == 'HasDetections':
                         types = str(chunk[fea].dtype)
                         types_dict[fea] = types
                         continue
@@ -128,16 +132,16 @@ def main(path=None, save_path = None,debug=True):
     #     # for i in types_dict.keys():
     #     #     f.writelines(i+','+types_dict[i]+'\n')
 
-
-    with timer("test label dict process"):
-        print("test label dict process start ")
-        data = pd.read_csv(test_path, chunksize=100000)
+    with timer("valid label dict process"):
+        print("valid label dict process start ")
+        data = pd.read_csv(valid_path, chunksize=100000)
         count = 0
+        # 将valid里面新出现的特征值都归为一类
         for chunk in data:
             print(count)
             for fea in chunk.columns:
                 types = str(chunk[fea].dtype)
-                if fea == 'MachineIdentifier':
+                if fea == 'MachineIdentifier' or fea == 'HasDetections':
                     continue
                 if types != 'object' and types != 'category':
                     chunk[fea] = chunk[fea].fillna(-1)
@@ -151,6 +155,55 @@ def main(path=None, save_path = None,debug=True):
                     label_dict[fea] = label_dict[fea] + tmp
                     label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
 
+    with timer("valid data process"):
+        print("valid data process start ")
+        data = pd.read_csv(valid_path, chunksize=100000)
+        count = 0
+        with tf.io.TFRecordWriter(save_valid_path) as w:
+            for chunk in data:
+                print(count)
+                for fea in chunk.columns:
+                    if fea == 'MachineIdentifier' or fea == 'HasDetections':
+                        types = str(chunk[fea].dtype)
+                        continue
+                    types = str(chunk[fea].dtype)
+                    if types != 'object' and types != 'category':
+                        chunk[fea] = chunk[fea].fillna(-1)
+                        chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                        chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
+                    else:
+                        chunk[fea] = chunk[fea].fillna('-1')
+                        chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
+
+                for row in chunk.iterrows():
+                    tmp = dict(row[1])
+                    example = convert_to_tfrecord(types_dict, tmp)
+                    w.write(example.SerializeToString())
+                count += 1
+
+    with timer("test label dict process"):
+        print("test label dict process start ")
+        data = pd.read_csv(test_path, chunksize=100000)
+        count = 0
+        # 将test里面新出现的特征值都归为一类
+        for chunk in data:
+            print(count)
+            for fea in chunk.columns:
+                types = str(chunk[fea].dtype)
+                if fea == 'MachineIdentifier' or fea == 'HasDetections':
+                    continue
+                if types != 'object' and types != 'category':
+                    chunk[fea] = chunk[fea].fillna(-1)
+                    chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                    tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
+                    label_dict[fea] = label_dict[fea] + tmp
+                    label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
+                else:
+                    chunk[fea] = chunk[fea].fillna('-1')
+                    tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
+                    label_dict[fea] = label_dict[fea] + tmp
+                    label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
+        # 保存后续需要使用的三个字典
         json_dump = json.dumps(types_dict)
         fileObject = open(root_path + 'types_dict.json', 'w')
         fileObject.write(json_dump)
@@ -182,9 +235,8 @@ def main(path=None, save_path = None,debug=True):
                 for chunk in data:
                     print(count)
                     for fea in chunk.columns:
-                        if fea == 'MachineIdentifier':
+                        if fea == 'MachineIdentifier' or fea == 'HasDetections':
                             types = str(chunk[fea].dtype)
-
                             continue
                         types = str(chunk[fea].dtype)
                         if types != 'object' and types != 'category':
@@ -209,7 +261,9 @@ if __name__ == "__main__":
     root_path = '../data/'
     path = root_path+'train_sample.csv'
     test_path = root_path + 'test_sample.csv'
+    valid_path = root_path + 'valid_sample.csv'
     save_path = root_path + 'train_sample.tfrecord'
+    save_valid_path = root_path + 'valid_sample.tfrecord'
     save_test_path = root_path + 'test_sample.tfrecord'
     with timer("Full feature select run"):
         main(path=path,save_path=save_path, debug=True)

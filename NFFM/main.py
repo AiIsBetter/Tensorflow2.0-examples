@@ -54,16 +54,16 @@ def main(path = None,test_path = None,debug = True):
         dropout_deep = [0.5,0.5,0.5,0.5],
         embeddings_initializer = tf.keras.initializers.GlorotUniform,
         kernel_initializer=tf.keras.initializers.GlorotUniform,
-        epoch = 1000,
         batch_size = 1024,
         verbose = True,
         random_seed = 2020,
         eval_metric = roc_auc_score,
         l2_reg = 0.0001,
-        use_bn = True,
+        use_bn = False,
         greater_is_better = True)
-
-
+        optimizer = tf.keras.optimizers.Adam(learning_rate=0.05)
+        metric = tf.keras.metrics.AUC()
+        epochs = 1000
         filenames = [path]
         data = tf.data.TFRecordDataset(filenames)
 
@@ -73,20 +73,34 @@ def main(path = None,test_path = None,debug = True):
 
         # Apply the parsing to each record from the dataset.
         data = data.map(parse_record)
-        data = data.repeat()
-        data = data.shuffle(buffer_size=1000)
-        data = data.batch(batch_size=32)
-        data = data.prefetch(buffer_size=1)
+        data = data.repeat(1)
+        data = data.shuffle(buffer_size=20000)
+        data = data.batch(batch_size=1024)
+        data = data.prefetch(buffer_size=20000)
 
-        for step, batch_x in enumerate(data):
-            with tf.GradientTape() as tape:
-                y_pred = model(batch_x,training = True)
-                loss = tf.keras.losses.sparse_categorical_crossentropy(y_true=y, y_pred=y_pred)
-                loss = tf.reduce_mean(loss)
-                print("batch %d: loss %f" % (batch_index, loss.numpy()))
-            grads = tape.gradient(loss, model.variables)
+        valid_data = tf.data.TFRecordDataset(filenames)
 
 
+        # Apply the parsing to each record from the dataset.
+        valid_data = valid_data.map(parse_record)
+        valid_data = valid_data.repeat(1)
+        valid_data = valid_data.shuffle(buffer_size=20000)
+        valid_data = valid_data.batch(batch_size=1024)
+        valid_data = valid_data.prefetch(buffer_size=20000)
+        for epoch in range(epochs):
+            for step, batch_x in enumerate(data):
+                with tf.GradientTape() as tape:
+                    y_pred = model(batch_x,training = True)
+                    loss = tf.keras.losses.binary_crossentropy(y_true=batch_x['HasDetections'], y_pred=y_pred)
+                    loss = tf.reduce_mean(loss)
+                    if step %100==0:
+                        print("batch %d: loss %f" % (step, loss.numpy()))
+                grads = tape.gradient(loss, model.variables)
+                optimizer.apply_gradients(grads_and_vars=zip(grads, model.variables))
+            for step, batch_x in enumerate(valid_data):
+                y_pred = model(batch_x, training=False)
+                metric.update_state(y_true=batch_x['HasDetections'], y_pred=y_pred)
+            print("epoch %d: auc %f" % (epoch, metric.result().numpy()))
 
 if __name__ == "__main__":
     with timer("train finish"):
