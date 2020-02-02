@@ -132,8 +132,8 @@ def main(path=None, save_path = None,debug=True):
     #     # for i in types_dict.keys():
     #     #     f.writelines(i+','+types_dict[i]+'\n')
 
-    with timer("valid label dict process"):
-        print("valid label dict process start ")
+    with timer("val label dict process"):
+        print("val label dict process start ")
         data = pd.read_csv(valid_path, chunksize=100000)
         count = 0
         # 将valid里面新出现的特征值都归为一类
@@ -155,8 +155,8 @@ def main(path=None, save_path = None,debug=True):
                     label_dict[fea] = label_dict[fea] + tmp
                     label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
 
-    with timer("valid data process"):
-        print("valid data process start ")
+    with timer("val data process"):
+        print("val data process start ")
         data = pd.read_csv(valid_path, chunksize=100000)
         count = 0
         with tf.io.TFRecordWriter(save_valid_path) as w:
@@ -259,11 +259,11 @@ def main(path=None, save_path = None,debug=True):
 
 if __name__ == "__main__":
     root_path = '../data/'
-    path = root_path+'train_sample.csv'
-    test_path = root_path + 'test_sample.csv'
-    valid_path = root_path + 'valid_sample.csv'
-    save_path = root_path + 'train_sample.tfrecord'
-    save_valid_path = root_path + 'valid_sample.tfrecord'
-    save_test_path = root_path + 'test_sample.tfrecord'
+    path = root_path+'train_full.csv'
+    test_path = root_path + 'test_full.csv'
+    valid_path = root_path + 'val_full.csv'
+    save_path = root_path + 'train_full.tfrecord'
+    save_valid_path = root_path + 'val_full.tfrecord'
+    save_test_path = root_path + 'test_full.tfrecord'
     with timer("Full feature select run"):
         main(path=path,save_path=save_path, debug=True)
