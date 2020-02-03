@@ -11,21 +11,40 @@ import pandas as pd
 import numpy as np
 from sklearn.metrics import roc_auc_score
 import tensorflow as tf
+import tqdm
 import itertools
 class NFFM(tf.keras.models.Model):
-    def __init__(self, label_dict, label_len_dict,only_lr,
-                 embedding_size, dropout,
-                 deep_layers,
+    def __init__(self, label_dict, label_len_dict,label_col,
+                 features,only_lr,batch_size=256,
+                 epochs = 1,
+                 train_path = None,early_stop=False,
+                 early_stop_round=3,eval_path=None,
+                 eval_step = 500, eval_metric = 'auc',
+                 patience = 0.001,
+                 greater_is_better = True,embedding_size =4,
+                 dropout =[0.5,0.5,0.5],deep_layers = [128,128],
                  deep_layers_activation=tf.nn.relu,
                  embeddings_initializer = tf.keras.initializers.GlorotUniform,
                  kernel_initializer = tf.keras.initializers.GlorotUniform,
-                 verbose=False, random_seed=2020,
-                 eval_metric=roc_auc_score,
-                 l2_reg=0.0, use_bn = True,greater_is_better=True):
+                 verbose=1, random_seed=2020,
+                 l2_reg=0.0, use_bn = True,
+                 optimizer = tf.keras.optimizers.Adam(learning_rate=0.001)):
         super().__init__()
+        self.batch_size = batch_size
+        self.epochs = epochs
         self.label_dict = label_dict
         self.label_len_dict = label_len_dict
+        self.label_col = label_col
+        self.features = features
         self.only_lr = only_lr
+        self.train_path = train_path
+        self.early_stop = early_stop
+        self.early_stop_round = early_stop_round
+        self.eval_path = eval_path
+        self.eval_step = eval_step
+        self.eval_metric = eval_metric
+        self.patience = patience
+        self.greater_is_better = greater_is_better
         self.embedding_size = embedding_size
         self.dropout  = dropout
         self.deep_layers = deep_layers
@@ -34,10 +53,21 @@ class NFFM(tf.keras.models.Model):
         self.kernel_initializer = kernel_initializer
         self.verbose = verbose
         self.random_seed = random_seed
-        self.eval_metric = eval_metric
         self.l2_reg = l2_reg
         self.use_bn = use_bn
-        self.greater_is_better = greater_is_better
+
+        # init data
+        self.dataset()
+
+        # init optimizer
+        self.optimizer = optimizer
+
+        #early stop start
+        self.round = 0
+        if self.greater_is_better:
+            self.best_score = 0
+        else:
+            self.best_score = 99999
         # lr
         self.emb_lr = {}
         for i in label_len_dict.keys():
@@ -59,11 +89,10 @@ class NFFM(tf.keras.models.Model):
             self.dense.append(tf.keras.layers.Dense(self.deep_layers[i],kernel_initializer = self.kernel_initializer,
                                                  kernel_regularizer=tf.keras.regularizers.l2(l=self.l2_reg)))
         self.dense_out = tf.keras.layers.Dense(1 ,kernel_initializer = self.kernel_initializer,
-                                                 kernel_regularizer=tf.keras.regularizers.l2(l=self.l2_reg))
+                                                 kernel_regularizer=tf.keras.regularizers.l2(l=self.l2_reg),name = 'test')
 
-        a = 1
+
     def call(self, inputs, training=None):
-
         lr = {}
         # lr
         for i in self.label_len_dict.keys():
@@ -122,3 +151,104 @@ class NFFM(tf.keras.models.Model):
         out = tf.reshape(out,shape=[-1])
         # self.out = keras.layers.Activation('sigmoid', name='odm_mbox_conf_softmax')(self.out)
         return out
+    def eval(self):
+        print('evaluting...')
+        # writer = tf.summary.create_file_writer('logdir/')
+        # tf.summary.trace_on(graph=True, profiler=True)
+        for step_val, batch_x in enumerate(self.val_data):
+            if step_val%100 == 0 and step_val>0:
+                print('evaluting step:{}'.format(step_val))
+
+            y_pred = self.call(batch_x, training=False)
+
+            self.eval_metric.update_state(y_true=batch_x[self.label_col], y_pred=y_pred)
+            if step_val>100:
+                # with writer.as_default():
+                #     tf.summary.trace_export(
+                #         name="my_func_trace",
+                #         step=0,
+                #         profiler_outdir='logdir/')
+                break
+
+
+    def train(self,checkpoint):
+
+        for epoch in range(self.epochs):
+            for step, batch_x in enumerate(self.train_data):
+                with tf.GradientTape() as tape:
+                    y_pred = self.call(batch_x,training = True)
+                    loss = tf.keras.losses.binary_crossentropy(y_true=batch_x['HasDetections'], y_pred=y_pred)
+                    loss = tf.reduce_mean(loss)
+
+                    if step %self.verbose == 0 and step>0:
+                        print("##########################step %d: loss %f ###########################" % (step, loss.numpy()))
+                grads = tape.gradient(loss, self.trainable_variables)
+                self.optimizer.apply_gradients(grads_and_vars=zip(grads, self.trainable_variables))
+                if self.eval_metric !=None and self.eval_path !=None:
+                    if step % self.eval_step == 0 and step > 0:
+                        self.eval()
+                        if self.early_stop:
+                            if self.greater_is_better:
+                                if self.eval_metric.result().numpy()<self.best_score:
+                                    self.round += 1
+                                elif self.eval_metric.result().numpy()-self.best_score > self.patience:
+                                    tmp_score = self.eval_metric.result().numpy()
+                                    self.best_score = tmp_score
+                                    self.round = 0
+                                    path = checkpoint.save(checkpoint_number=step) # 保存模型参数到文件
+                                    print("model saved to %s" % path)
+                            else:
+                                if self.eval_metric.result().numpy()>self.best_score:
+                                    self.round += 1
+                                elif self.best_score - self.eval_metric.result().numpy()>self.patience:
+                                    tmp_score = self.eval_metric.result().numpy()
+                                    self.best_score = tmp_score
+                                    self.round = 0
+                                    path = checkpoint.save(checkpoint_number=step)  # 保存模型参数到文件
+                                    print("model saved to %s" % path)
+                            if self.round>self.early_stop_round:
+                                break
+                            if self.verbose:
+                                print("step %d:  step auc: %f  ,best auc %f . " % (
+                                    step, self.eval_metric.result().numpy(), self.best_score))
+            if self.round > self.early_stop_round:
+                break
+
+    def dataset(self):
+        val_filenames = [self.eval_path]
+        self.val_data = tf.data.TFRecordDataset(val_filenames)
+        self.val_data = self.val_data.map(self.parse_record, num_parallel_calls=10).cache()
+        self.val_data = self.val_data.repeat()
+        self.val_data = self.val_data.shuffle(buffer_size=200000)
+        self.val_data = self.val_data.batch(batch_size=self.batch_size)
+        self.val_data = self.val_data.prefetch(buffer_size=10)
+
+        filenames = [self.train_path]
+        self.train_data = tf.data.TFRecordDataset(filenames)
+        self.train_data = self.train_data.repeat(1)
+        self.train_data = self.train_data.prefetch(buffer_size=10)
+        self.train_data = self.train_data.map(self.parse_record,num_parallel_calls=tf.data.experimental.AUTOTUNE).cache()
+
+        self.train_data = self.train_data.shuffle(buffer_size=200000)
+        self.train_data = self.train_data.batch(batch_size=self.batch_size)
+
+    def parse_record(self,record):
+        return tf.io.parse_single_example(record, features=self.features)
+
+    def infer(self,test_path,target_name = 'target',id_name='id'):
+        y_pred = []
+        y_id = []
+        filenames = [test_path]
+        test_data = tf.data.TFRecordDataset(filenames)
+        test_data = test_data.map(self.parse_record, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        test_data = test_data.repeat(1)
+        test_data = test_data.batch(batch_size=self.batch_size)
+        test_data = test_data.prefetch(buffer_size=10)
+        for step_test, batch_x in enumerate(test_data):
+            if step_test%1000 ==0 and step_test>0:
+                print(step_test)
+            tmp = self.call(batch_x, training=False)
+            y_id = batch_x[id_name]
+            y_pred = y_pred+list(tmp.numpy())
+        submission = pd.DataFrame({id_name:y_id,target_name:y_pred})
+        return submission
