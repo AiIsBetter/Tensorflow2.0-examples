@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 from sklearn.metrics import roc_auc_score
 import tensorflow as tf
+from tensorflow import python
 import tqdm
 import itertools
 class NFFM(tf.keras.models.Model):
@@ -71,7 +72,8 @@ class NFFM(tf.keras.models.Model):
         # lr
         self.emb_lr = {}
         for i in label_len_dict.keys():
-            self.emb_lr[i] = tf.keras.layers.Embedding(input_dim=max(self.label_len_dict[i])+1,output_dim=self.embedding_size,embeddings_initializer = self.embeddings_initializer)
+            self.emb_lr[i] = tf.keras.layers.Embedding(input_dim=max(self.label_len_dict[i])+1,output_dim=self.embedding_size,
+                                                       embeddings_initializer = self.embeddings_initializer)
         # ffm
         self.emb_ffm = {}
         for i in label_len_dict.keys():
@@ -89,7 +91,7 @@ class NFFM(tf.keras.models.Model):
             self.dense.append(tf.keras.layers.Dense(self.deep_layers[i],kernel_initializer = self.kernel_initializer,
                                                  kernel_regularizer=tf.keras.regularizers.l2(l=self.l2_reg)))
         self.dense_out = tf.keras.layers.Dense(1 ,kernel_initializer = self.kernel_initializer,
-                                                 kernel_regularizer=tf.keras.regularizers.l2(l=self.l2_reg),name = 'test')
+                                                 kernel_regularizer=tf.keras.regularizers.l2(l=self.l2_reg))
 
 
     def call(self, inputs, training=None):
@@ -132,7 +134,7 @@ class NFFM(tf.keras.models.Model):
             v_j.append(interaction_dict[fea2][fea1])
         v_i = tf.transpose(v_i, perm=[1, 0, 2])
         v_j = tf.transpose(v_j, perm=[1, 0, 2])
-        vi_vj = tf.multiply(v_i, v_j)
+        vi_vj = tf.multiply(v_i, v_j,name = 'testtt1')
         vi_vj = tf.reshape(vi_vj, [-1, input_size * self.embedding_size])
 
         # DNN
@@ -162,7 +164,7 @@ class NFFM(tf.keras.models.Model):
             y_pred = self.call(batch_x, training=False)
 
             self.eval_metric.update_state(y_true=batch_x[self.label_col], y_pred=y_pred)
-            if step_val>100:
+            if step_val>20:
                 # with writer.as_default():
                 #     tf.summary.trace_export(
                 #         name="my_func_trace",
@@ -172,7 +174,6 @@ class NFFM(tf.keras.models.Model):
 
 
     def train(self,checkpoint):
-
         for epoch in range(self.epochs):
             for step, batch_x in enumerate(self.train_data):
                 with tf.GradientTape() as tape:
@@ -211,44 +212,49 @@ class NFFM(tf.keras.models.Model):
                             if self.verbose:
                                 print("step %d:  step auc: %f  ,best auc %f . " % (
                                     step, self.eval_metric.result().numpy(), self.best_score))
+                break
             if self.round > self.early_stop_round:
                 break
 
     def dataset(self):
         val_filenames = [self.eval_path]
         self.val_data = tf.data.TFRecordDataset(val_filenames)
-        self.val_data = self.val_data.map(self.parse_record, num_parallel_calls=10).cache()
+
         self.val_data = self.val_data.repeat()
         self.val_data = self.val_data.shuffle(buffer_size=200000)
         self.val_data = self.val_data.batch(batch_size=self.batch_size)
-        self.val_data = self.val_data.prefetch(buffer_size=10)
+        self.val_data = self.val_data.map(self.parse_record, num_parallel_calls=tf.data.experimental.AUTOTUNE).cache()
+        self.val_data = self.val_data.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
         filenames = [self.train_path]
         self.train_data = tf.data.TFRecordDataset(filenames)
         self.train_data = self.train_data.repeat(1)
-        self.train_data = self.train_data.prefetch(buffer_size=10)
-        self.train_data = self.train_data.map(self.parse_record,num_parallel_calls=tf.data.experimental.AUTOTUNE).cache()
-
         self.train_data = self.train_data.shuffle(buffer_size=200000)
         self.train_data = self.train_data.batch(batch_size=self.batch_size)
+        self.train_data = self.train_data.map(self.parse_record,
+                                              num_parallel_calls=tf.data.experimental.AUTOTUNE).cache()
+        self.train_data = self.train_data.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
 
     def parse_record(self,record):
-        return tf.io.parse_single_example(record, features=self.features)
+        return tf.io.parse_example(record, features=self.features)
 
     def infer(self,test_path,target_name = 'target',id_name='id'):
         y_pred = []
         y_id = []
         filenames = [test_path]
         test_data = tf.data.TFRecordDataset(filenames)
-        test_data = test_data.map(self.parse_record, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         test_data = test_data.repeat(1)
-        test_data = test_data.batch(batch_size=self.batch_size)
-        test_data = test_data.prefetch(buffer_size=10)
+        self.train_data = self.train_data.shuffle(buffer_size=200000)
+        test_data = test_data.batch(batch_size=self.batch_size*2)
+        test_data = test_data.map(self.parse_record,
+                                              num_parallel_calls=tf.data.experimental.AUTOTUNE).cache()
+        test_data = test_data.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
         for step_test, batch_x in enumerate(test_data):
-            if step_test%1000 ==0 and step_test>0:
-                print(step_test)
+            # if step_test%1000 ==0 and step_test>0:
+            print('inferring: ',step_test)
             tmp = self.call(batch_x, training=False)
-            y_id = batch_x[id_name]
-            y_pred = y_pred+list(tmp.numpy())
+            y_id = y_id + list(batch_x[id_name].numpy())
+            y_pred = y_pred + list(tmp.numpy())
+            break
         submission = pd.DataFrame({id_name:y_id,target_name:y_pred})
         return submission

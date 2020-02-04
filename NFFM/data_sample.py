@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import gc
 dtypes = {
-        'MachineIdentifier':                                    'category',
+        'MachineIdentifier':                                    'object',
         'ProductName':                                          'category',
         'EngineVersion':                                        'category',
         'AppVersion':                                           'category',
@@ -89,10 +89,10 @@ dtypes = {
         }
 print('Loading Train and Test Data.\n')
 train = pd.read_csv('../data/train.csv', dtype=dtypes, low_memory=True)
-train['MachineIdentifier'] = train.index.astype('uint32')
+
 print('train load finished')
 test  = pd.read_csv('../data/test.csv',  dtype=dtypes, low_memory=True)
-test['MachineIdentifier']  = test.index.astype('uint32')
+
 test['HasDetections']=[0]*len(test)
 print('test load finished')
 
@@ -113,8 +113,8 @@ for f in float_features:
     train[f] = np.digitize(train[f], bins=bins)
     test[f] = np.digitize(test[f], bins=bins)
 
-# train_sample = train.sample(frac = 0.05,random_state=2020)
-train_sample = train
+train_sample = train.sample(frac = 0.01,random_state=2020)
+# train_sample = train
 X = train_sample.drop('HasDetections',axis =1)
 Y = train_sample['HasDetections']
 train,val,train_y,val_y = train_test_split(X,Y,test_size=0.2, random_state=2020)
@@ -122,7 +122,7 @@ del train_sample
 gc.collect()
 train_sample = pd.concat([train,train_y],axis = 1)
 val_sample = pd.concat([val,val_y],axis = 1)
-train_sample.to_csv('../data/train_full.csv',index = False)
-val_sample.to_csv('../data/val_full.csv',index = False)
-# test_sample = test.sample(frac = 0.05,random_state=2020)
-test.to_csv('../data/test_full.csv',index = False)
+train_sample.to_csv('../data/train_sample.csv',index = False)
+val_sample.to_csv('../data/val_sample.csv',index = False)
+test_sample = test.sample(frac = 0.01,random_state=2020)
+test.to_csv('../data/test_sample.csv',index = False)

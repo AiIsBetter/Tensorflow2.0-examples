@@ -9,6 +9,7 @@ Code: https://github.com/AiIsBetter
 import pandas as pd
 import numpy as np
 import tensorflow as tf
+
 from sklearn.metrics import roc_auc_score
 from NFFM import NFFM
 import time
@@ -20,7 +21,10 @@ def timer(title):
     yield
     print("{} - done in {:.0f}s".format(title, time.time() - t0))
 
-
+# tf.keras.backend.set_floatx('float16')
+# tf.keras.backend.set_epsilon(1e-4)
+physical_devices = tf.config.list_physical_devices('GPU')
+tf.config.experimental.set_memory_growth(physical_devices[0], True)
 def main(path = None,test_path = None,debug = True):
 
     with timer("decode prepare"):
@@ -76,13 +80,15 @@ def main(path = None,test_path = None,debug = True):
         print('model training....')
         checkpoint = tf.train.Checkpoint(myModel=model)
         checkpoint = tf.train.CheckpointManager(checkpoint, directory='model/', max_to_keep=3)
-        # with tf.python.eager.profiler.Profiler('logdir_path'):
+
         model.train(checkpoint = checkpoint)
 
         print('model inferring....')
-        checkpoint = tf.train.Checkpoint(myModel=model)  # 实例化Checkpoint，指定恢复对象为model
-        checkpoint.restore(tf.train.latest_checkpoint('model/'))  # 从文件恢复模型参数
+        # checkpoint = tf.train.Checkpoint(myModel=model)  # 实例化Checkpoint，指定恢复对象为model
+        # checkpoint.restore(tf.train.latest_checkpoint('model/'))  # 从文件恢复模型参数
         submission = model.infer(test_path,target_name = 'HasDetections',id_name='MachineIdentifier')
+        submission['MachineIdentifier'] = submission['MachineIdentifier'].apply(int)
+        submission['MachineIdentifier'] = submission['MachineIdentifier'].apply(str)
         submission.to_csv('submission.csv',index = False)
 
 
@@ -93,7 +99,7 @@ def main(path = None,test_path = None,debug = True):
 if __name__ == "__main__":
     with timer("train finish"):
         root_path = '../data/'
-        train_path = root_path + 'train_full.tfrecord'
-        val_path = root_path + 'val_full.tfrecord'
-        test_path = root_path + 'test_full.tfrecord'
+        train_path = root_path + 'train_sample.tfrecord'
+        val_path = root_path + 'val_sample.tfrecord'
+        test_path = root_path + 'test_sample.tfrecord'
         main(path=train_path,test_path = test_path, debug=True)

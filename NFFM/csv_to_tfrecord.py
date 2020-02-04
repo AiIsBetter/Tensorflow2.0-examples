@@ -259,11 +259,11 @@ def main(path=None, save_path = None,debug=True):
 
 if __name__ == "__main__":
     root_path = '../data/'
-    path = root_path+'train_full.csv'
-    test_path = root_path + 'test_full.csv'
-    valid_path = root_path + 'val_full.csv'
-    save_path = root_path + 'train_full.tfrecord'
-    save_valid_path = root_path + 'val_full.tfrecord'
-    save_test_path = root_path + 'test_full.tfrecord'
+    path = root_path+'train_sample.csv'
+    test_path = root_path + 'test_sample.csv'
+    valid_path = root_path + 'val_sample.csv'
+    save_path = root_path + 'train_sample.tfrecord'
+    save_valid_path = root_path + 'val_sample.tfrecord'
+    save_test_path = root_path + 'test_sample.tfrecord'
     with timer("Full feature select run"):
         main(path=path,save_path=save_path, debug=True)
