@@ -59,6 +59,21 @@ def main(path=None, save_path = None,debug=True):
     # 该词典只存入要处理的特征，不存入MachineIdentifier id列和HasDetections label列
     label_dict = {}
     label_len_dict = {}
+    with timer("special column select top 100"):
+        # 该模块用来对所有特征列统计特征值，在下个模块用这些获取的字典来进行labelencode
+        print("special column select top 100 ")
+        data = pd.read_csv(path,usecols=['AvSigVersion','OsBuildLab'])
+        data = data.fillna('-1')
+        tmp = data['AvSigVersion'].value_counts()
+        tmp = list(pd.DataFrame(tmp).reset_index().loc[0:99]['index'].values)
+        label_dict['AvSigVersion'] = tmp
+        label_len_dict['AvSigVersion'] = list(range(len(tmp)))
+
+        tmp = data['OsBuildLab'].value_counts()
+        tmp = list(pd.DataFrame(tmp).reset_index().loc[0:99]['index'].values)
+        label_dict['OsBuildLab'] = tmp
+        label_len_dict['OsBuildLab'] = list(range(len(tmp)))
+
     with timer("train label dict process"):
         # 该模块用来对所有特征列统计特征值，在下个模块用这些获取的字典来进行labelencode
         print("train label dict process start ")
@@ -68,11 +83,12 @@ def main(path=None, save_path = None,debug=True):
             print(count)
             for fea in chunk.columns:
                 types = str(chunk[fea].dtype)
-                if fea == 'MachineIdentifier' or fea == 'HasDetections':
+                if fea in ['MachineIdentifier' ,'HasDetections']:
                     continue
                 if types != 'object' and types != 'category':
                     chunk[fea] = chunk[fea].fillna(-1)
-                    chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                    if 'float' in types:
+                        chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
                     if fea not in label_dict:
                         tmp = list(chunk[fea].unique())
                         label_dict[fea] = tmp
@@ -90,7 +106,10 @@ def main(path=None, save_path = None,debug=True):
                     else:
                         tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
                         label_dict[fea] = label_dict[fea] + tmp
-                        label_len_dict[fea] = label_len_dict[fea] + list(range(len(label_len_dict[fea]),len(label_len_dict[fea])+len(tmp)))
+                        if fea in ['OsBuildLab','AvSigVersion']:
+                            label_len_dict[fea] = label_len_dict[fea] + [max(label_len_dict[fea])+1] * len(tmp)
+                        else:
+                            label_len_dict[fea] = label_len_dict[fea] + list(range(len(label_len_dict[fea]),len(label_len_dict[fea])+len(tmp)))
         del data
         gc.collect()
     with timer("train data process"):
@@ -111,7 +130,8 @@ def main(path=None, save_path = None,debug=True):
                     types = str(chunk[fea].dtype)
                     if types !='object' and types !='category':
                         chunk[fea] = chunk[fea].fillna(-1)
-                        chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                        if 'float' in types:
+                            chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
                         chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
                         types = str(chunk[fea].dtype)
                         types_dict[fea] = types
@@ -134,7 +154,7 @@ def main(path=None, save_path = None,debug=True):
 
     with timer("val label dict process"):
         print("val label dict process start ")
-        data = pd.read_csv(valid_path, chunksize=100000)
+        data = pd.read_csv(valid_path, chunksize=1000000)
         count = 0
         # 将valid里面新出现的特征值都归为一类
         for chunk in data:
@@ -145,7 +165,8 @@ def main(path=None, save_path = None,debug=True):
                     continue
                 if types != 'object' and types != 'category':
                     chunk[fea] = chunk[fea].fillna(-1)
-                    chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                    if 'float' in types:
+                        chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
                     tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
                     label_dict[fea] = label_dict[fea] + tmp
                     label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
@@ -153,7 +174,10 @@ def main(path=None, save_path = None,debug=True):
                     chunk[fea] = chunk[fea].fillna('-1')
                     tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
                     label_dict[fea] = label_dict[fea] + tmp
-                    label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
+                    if fea in ['OsBuildLab', 'AvSigVersion']:
+                        label_len_dict[fea] = label_len_dict[fea] + [max(label_len_dict[fea])] * len(tmp)
+                    else:
+                        label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
 
     with timer("val data process"):
         print("val data process start ")
@@ -169,7 +193,8 @@ def main(path=None, save_path = None,debug=True):
                     types = str(chunk[fea].dtype)
                     if types != 'object' and types != 'category':
                         chunk[fea] = chunk[fea].fillna(-1)
-                        chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                        if 'float' in types:
+                            chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
                         chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
                     else:
                         chunk[fea] = chunk[fea].fillna('-1')
@@ -183,7 +208,7 @@ def main(path=None, save_path = None,debug=True):
 
     with timer("test label dict process"):
         print("test label dict process start ")
-        data = pd.read_csv(test_path, chunksize=100000)
+        data = pd.read_csv(test_path, chunksize=1000000)
         count = 0
         # 将test里面新出现的特征值都归为一类
         for chunk in data:
@@ -194,7 +219,8 @@ def main(path=None, save_path = None,debug=True):
                     continue
                 if types != 'object' and types != 'category':
                     chunk[fea] = chunk[fea].fillna(-1)
-                    chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                    if 'float' in types:
+                        chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
                     tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
                     label_dict[fea] = label_dict[fea] + tmp
                     label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
@@ -202,10 +228,13 @@ def main(path=None, save_path = None,debug=True):
                     chunk[fea] = chunk[fea].fillna('-1')
                     tmp = list(chunk[~chunk[fea].isin(label_dict[fea])][fea].unique())
                     label_dict[fea] = label_dict[fea] + tmp
-                    label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])]*len(tmp)
+                    if fea in ['OsBuildLab', 'AvSigVersion']:
+                        label_len_dict[fea] = label_len_dict[fea] + [max(label_len_dict[fea])] * len(tmp)
+                    else:
+                        label_len_dict[fea] = label_len_dict[fea] + [len(label_len_dict[fea])] * len(tmp)
         # 保存后续需要使用的三个字典
         json_dump = json.dumps(types_dict)
-        fileObject = open(root_path + 'types_dict.json', 'w')
+        fileObject = open(root_path + 'types_dict_full.json', 'w')
         fileObject.write(json_dump)
         fileObject.close()
 
@@ -213,7 +242,7 @@ def main(path=None, save_path = None,debug=True):
             if not isinstance(label_dict[i][0], str):
                 label_dict[i] = [int(j) for j in label_dict[i]]
         json_dump = json.dumps(label_dict)
-        fileObject = open(root_path + 'label_dict.json', 'w')
+        fileObject = open(root_path + 'label_dict_full.json', 'w')
         fileObject.write(json_dump)
         fileObject.close()
 
@@ -221,7 +250,7 @@ def main(path=None, save_path = None,debug=True):
             if not isinstance(label_len_dict[i][0], str):
                 label_len_dict[i] = [int(j) for j in label_len_dict[i]]
         json_dump = json.dumps(label_len_dict)
-        fileObject = open(root_path + 'label_len_dict.json', 'w')
+        fileObject = open(root_path + 'label_len_dict_full.json', 'w')
         fileObject.write(json_dump)
         fileObject.close()
 
@@ -241,12 +270,12 @@ def main(path=None, save_path = None,debug=True):
                         types = str(chunk[fea].dtype)
                         if types != 'object' and types != 'category':
                             chunk[fea] = chunk[fea].fillna(-1)
-                            chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
+                            if 'float' in types:
+                                chunk[fea] = chunk[fea].apply(lambda x: int(math.log(1 + x * x)))
                             chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
                         else:
                             chunk[fea] = chunk[fea].fillna('-1')
                             chunk[fea] = chunk[fea].map(dict(zip(label_dict[fea], label_len_dict[fea])))
-
                     for row in chunk.iterrows():
                         tmp = dict(row[1])
                         # Parse each csv row to TF Example using the above functions.
@@ -259,11 +288,11 @@ def main(path=None, save_path = None,debug=True):
 
 if __name__ == "__main__":
     root_path = '../data/'
-    path = root_path+'train_sample.csv'
-    test_path = root_path + 'test_sample.csv'
-    valid_path = root_path + 'val_sample.csv'
-    save_path = root_path + 'train_sample.tfrecord'
-    save_valid_path = root_path + 'val_sample.tfrecord'
-    save_test_path = root_path + 'test_sample.tfrecord'
+    path = root_path+'train_full.csv'
+    test_path = root_path + 'test_full.csv'
+    valid_path = root_path + 'val_full.csv'
+    save_path = root_path + 'train_full.tfrecord'
+    save_valid_path = root_path + 'val_full.tfrecord'
+    save_test_path = root_path + 'test_full.tfrecord'
     with timer("Full feature select run"):
         main(path=path,save_path=save_path, debug=True)

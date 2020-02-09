@@ -12,6 +12,7 @@ import tensorflow as tf
 
 from sklearn.metrics import roc_auc_score
 from NFFM import NFFM
+
 import time
 import json
 from contextlib import contextmanager
@@ -25,6 +26,7 @@ def timer(title):
 # tf.keras.backend.set_epsilon(1e-4)
 physical_devices = tf.config.list_physical_devices('GPU')
 tf.config.experimental.set_memory_growth(physical_devices[0], True)
+
 def main(path = None,test_path = None,debug = True):
 
     with timer("decode prepare"):
@@ -33,13 +35,13 @@ def main(path = None,test_path = None,debug = True):
         #     for line in f.readlines():
         #         features[line[:line.rfind(',')]] = line[line.rfind(',')+1:-1]
 
-        with open(root_path + 'types_dict.json', 'r') as f:
+        with open(root_path + 'types_dict_full.json', 'r') as f:
             types_dict = json.loads(f.read())
 
-        with open(root_path + 'label_dict.json', 'r') as f:
+        with open(root_path + 'label_dict_full.json', 'r') as f:
             label_dict = json.loads(f.read())
 
-        with open(root_path + 'label_len_dict.json', 'r') as f:
+        with open(root_path + 'label_len_dict_full.json', 'r') as f:
             label_len_dict = json.loads(f.read())
 
         for i in types_dict.keys():
@@ -58,26 +60,27 @@ def main(path = None,test_path = None,debug = True):
         features = features,
         only_lr = False,
         batch_size=256,
+        test_val_batch_size = 4096,
         epochs=1,
         train_path = train_path,
         early_stop=True,
         early_stop_round=1,
         eval_path=val_path,
-        eval_step=1000,
+        eval_step=500,
         eval_metric=tf.keras.metrics.AUC(),
         patience = 0.001,
         greater_is_better=True,
         embedding_size = 8,
-        dropout  = [0.5,0.5,0.5],#长度为deep layers长度+1
+        dropout  = None,#长度为deep layers长度+1
         deep_layers = [128, 128],
         embeddings_initializer = tf.keras.initializers.GlorotUniform,
         kernel_initializer=tf.keras.initializers.GlorotUniform,
         verbose = 100,
         random_seed = 2020,
-        l2_reg = 0.0001,
+        l2_reg = 0.01,
         use_bn = True,
         )
-        print('model training....')
+        # print('model training....')
         checkpoint = tf.train.Checkpoint(myModel=model)
         checkpoint = tf.train.CheckpointManager(checkpoint, directory='model/', max_to_keep=3)
 
@@ -87,9 +90,8 @@ def main(path = None,test_path = None,debug = True):
         # checkpoint = tf.train.Checkpoint(myModel=model)  # 实例化Checkpoint，指定恢复对象为model
         # checkpoint.restore(tf.train.latest_checkpoint('model/'))  # 从文件恢复模型参数
         submission = model.infer(test_path,target_name = 'HasDetections',id_name='MachineIdentifier')
-        submission['MachineIdentifier'] = submission['MachineIdentifier'].apply(int)
-        submission['MachineIdentifier'] = submission['MachineIdentifier'].apply(str)
-        submission.to_csv('submission.csv',index = False)
+        submission['MachineIdentifier'] = submission['MachineIdentifier'].str.decode("utf-8")
+        submission.to_csv('submission_full.csv',index = False)
 
 
 
@@ -99,7 +101,7 @@ def main(path = None,test_path = None,debug = True):
 if __name__ == "__main__":
     with timer("train finish"):
         root_path = '../data/'
-        train_path = root_path + 'train_sample.tfrecord'
-        val_path = root_path + 'val_sample.tfrecord'
-        test_path = root_path + 'test_sample.tfrecord'
+        train_path = root_path + 'train_full.tfrecord'
+        val_path = root_path + 'val_full.tfrecord'
+        test_path = root_path + 'test_full.tfrecord'
         main(path=train_path,test_path = test_path, debug=True)

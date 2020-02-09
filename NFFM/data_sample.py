@@ -113,7 +113,7 @@ for f in float_features:
     train[f] = np.digitize(train[f], bins=bins)
     test[f] = np.digitize(test[f], bins=bins)
 
-train_sample = train.sample(frac = 0.01,random_state=2020)
+train_sample = train.sample(frac = 0.1,random_state=2020)
 # train_sample = train
 X = train_sample.drop('HasDetections',axis =1)
 Y = train_sample['HasDetections']
@@ -124,5 +124,5 @@ train_sample = pd.concat([train,train_y],axis = 1)
 val_sample = pd.concat([val,val_y],axis = 1)
 train_sample.to_csv('../data/train_sample.csv',index = False)
 val_sample.to_csv('../data/val_sample.csv',index = False)
-test_sample = test.sample(frac = 0.01,random_state=2020)
-test.to_csv('../data/test_sample.csv',index = False)
+test_sample = test.sample(frac = 0.1,random_state=2020)
+test_sample.to_csv('../data/test_sample.csv',index = False)
