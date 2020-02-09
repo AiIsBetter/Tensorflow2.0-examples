@@ -7,6 +7,8 @@
 
 NFM 论文地址: [https://arxiv.org/pdf/1511.06443.pdf](https://arxiv.org/pdf/1511.06443.pdf). 
 
+数据地址: [https://www.kaggle.com/c/microsoft-malware-prediction/data](https://www.kaggle.com/c/microsoft-malware-prediction/data). 
+
 ## 更新记录
    - 2020-02-09 网络测试.  
         * 测试了不同的简单的特征编码方式，最终结果差别不大
