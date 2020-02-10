@@ -10,6 +10,9 @@ NFM 论文地址: [https://arxiv.org/pdf/1511.06443.pdf](https://arxiv.org/pdf/1
 数据地址: [https://www.kaggle.com/c/microsoft-malware-prediction/data](https://www.kaggle.com/c/microsoft-malware-prediction/data). 
 
 ## 更新记录
+   - 2020-02-10 网络优化.  
+        * 测试NFFM,训练后提交结果LB auc 为0.674左右,然后将embedding和 Bi-Interaction concat后接入deep部分,增长了0.001,提升不大,继续尝试别的网络优化.
+        
    - 2020-02-09 网络测试.  
         * 测试了不同的简单的特征编码方式，最终结果差别不大
         * 主要时间用来调整以下两个方面：
