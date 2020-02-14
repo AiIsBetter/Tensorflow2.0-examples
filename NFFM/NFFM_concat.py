@@ -74,7 +74,7 @@ class NFFM(tf.keras.models.Model):
         # lr
         self.emb_lr = {}
         for i in label_len_dict.keys():
-            self.emb_lr[i] = tf.keras.layers.Embedding(input_dim=max(self.label_len_dict[i])+1,output_dim=self.embedding_size,
+            self.emb_lr[i] = tf.keras.layers.Embedding(input_dim=max(self.label_len_dict[i])+1,output_dim=1,
                                                        embeddings_initializer = self.embeddings_initializer)
 
         # ffm
