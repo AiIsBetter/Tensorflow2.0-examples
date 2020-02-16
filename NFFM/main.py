@@ -12,7 +12,7 @@ import tensorflow as tf
 
 from sklearn.metrics import roc_auc_score
 from NFFM import NFFM
-
+from PNN_FGCN import PNN_FGCN
 import time
 import json
 from contextlib import contextmanager
@@ -53,33 +53,62 @@ def main(path = None,test_path = None,debug = True):
                 features[i] = tf.io.FixedLenFeature([], tf.string)
     with timer("train model"):
         print("model create")
-        model = NFFM(
-        label_dict = label_dict,
-        label_len_dict = label_len_dict,
-        label_col = 'HasDetections',
-        features = features,
-        only_lr = False,
-        batch_size=256,
-        test_val_batch_size = 4096,
-        epochs=1,
-        train_path = train_path,
-        early_stop=True,
-        early_stop_round=1,
-        eval_path=val_path,
-        eval_step=500,
-        eval_metric=tf.keras.metrics.AUC(),
-        patience = 0.001,
-        greater_is_better=True,
-        embedding_size = 8,
-        dropout  = None,#长度为deep layers长度+1
-        deep_layers = [128, 128],
-        embeddings_initializer = tf.keras.initializers.GlorotUniform,
-        kernel_initializer=tf.keras.initializers.GlorotUniform,
-        verbose = 100,
-        random_seed = 2020,
-        l2_reg = 0.01,
-        use_bn = True,
+        # model = NFFM(
+        # label_dict = label_dict,
+        # label_len_dict = label_len_dict,
+        # label_col = 'HasDetections',
+        # features = features,
+        # only_lr = False,
+        # batch_size=256,
+        # test_val_batch_size = 4096,
+        # epochs=1,
+        # train_path = train_path,
+        # early_stop=True,
+        # early_stop_round=1,
+        # eval_path=val_path,
+        # eval_step=2000,
+        # eval_metric=tf.keras.metrics.AUC(),
+        # patience = 0.001,
+        # greater_is_better=True,
+        # embedding_size = 8,
+        # dropout  = None,#长度为deep layers长度+1
+        # deep_layers = [1024,512,256],
+        # embeddings_initializer = tf.keras.initializers.GlorotUniform,
+        # kernel_initializer=tf.keras.initializers.GlorotUniform,
+        # verbose = 100,
+        # random_seed = 2020,
+        # l2_reg = 1,
+        # use_bn = True,
+        # )
+        model = PNN_FGCN(
+            label_dict=label_dict,
+            label_len_dict=label_len_dict,
+            label_col='HasDetections',
+            features=features,
+            pnn_model='ipnn',
+            use_fgcn = True,
+            batch_size=256,
+            test_val_batch_size=1024,
+            epochs=1,
+            train_path=train_path,
+            early_stop=True,
+            early_stop_round=1,
+            eval_path=val_path,
+            eval_step=2000,
+            eval_metric=tf.keras.metrics.AUC(),
+            patience=0.001,
+            greater_is_better=True,
+            embedding_size=8,
+            dropout=None,  # 长度为deep layers长度+1
+            deep_layers=[4096, 2048, 1024,512],
+            embeddings_initializer=tf.keras.initializers.GlorotUniform,
+            kernel_initializer=tf.keras.initializers.GlorotUniform,
+            verbose=100,
+            random_seed=2020,
+            l2_reg=1,
+            use_bn=True,
         )
+
         # print('model training....')
         checkpoint = tf.train.Checkpoint(myModel=model)
         checkpoint = tf.train.CheckpointManager(checkpoint, directory='model/', max_to_keep=3)
