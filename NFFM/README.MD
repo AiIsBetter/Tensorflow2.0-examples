@@ -5,11 +5,17 @@
 
 
 
-NFM 论文地址: [https://arxiv.org/pdf/1511.06443.pdf](https://arxiv.org/pdf/1511.06443.pdf). 
+NFM 论文地址: [https://arxiv.org/pdf/1511.06443.pdf](https://arxiv.org/pdf/1511.06443.pdf).  
+PNN 论文地址: [https://arxiv.org/pdf/1611.00144.pdf](https://arxiv.org/pdf/1611.00144.pdf).  
+xDeepFM 论文地址: [https://arxiv.org/pdf/1803.05170.pdf](https://arxiv.org/pdf/1803.05170.pdf).  
+FGCNN 论文地址: [https://arxiv.org/pdf/1904.04447.pdf](https://arxiv.org/pdf/1904.04447.pdf). 
 
 数据地址: [https://www.kaggle.com/c/microsoft-malware-prediction/data](https://www.kaggle.com/c/microsoft-malware-prediction/data). 
 
 ## 更新记录
+   - 2020-02-17 新增模型.  
+        * 新增了PNN,xDeepFM模型,FGCN layer提取特征.
+       
    - 2020-02-10 网络优化.  
         * 测试NFFM,训练后提交结果LB auc 为0.674左右,然后将embedding和 Bi-Interaction concat后接入deep部分,增长了0.001,提升不大,继续尝试别的网络优化.
         
