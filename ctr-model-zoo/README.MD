@@ -1,7 +1,7 @@
 
-# NFFM+Microsoft Malware Prediction
+# CTR+NN+Microsoft Malware Prediction
 
-这个项目主要用来记录练习Tensorflow2.0实现NFFM,并应用于实际数据集,编写网络和优化的过程.
+这个项目主要用来记录练习Tensorflow2.0实现推荐系统相关论文中，截止2019年末，效果较好并且具有创新的NN模型,并应用于实际数据集时,编写网络和优化的过程.
 
 
 
