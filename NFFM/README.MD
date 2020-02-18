@@ -14,8 +14,8 @@ FGCNN 论文地址: [https://arxiv.org/pdf/1904.04447.pdf](https://arxiv.org/pdf
 
 ## 更新记录
    - 2020-02-17 新增模型.  
-        * 新增了PNN,xDeepFM模型,FGCN layer提取特征.
-       
+        * 新增了PNN,xDeepFM模型,FGCN layer提取特征.目前来看，模型起到的优化效果有限，AUC表现上面看，NFFM>=xDeepFM>PNN_FGCN>PNN,但是数值也都在1个百分点以内。
+      
    - 2020-02-10 网络优化.  
         * 测试NFFM,训练后提交结果LB auc 为0.674左右,然后将embedding和 Bi-Interaction concat后接入deep部分,增长了0.001,提升不大,继续尝试别的网络优化.
         
