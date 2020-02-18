@@ -99,13 +99,12 @@ def load_config():
         'use_bn': True,
     }
 
-    # PNN_FGCN
+    # XDEEPFM
     params['XDEEPFM'] = {
         'label_dict': label_dict,
         'label_len_dict': label_len_dict,
         'label_col': 'HasDetections',
         'features': features,
-        'use_fgcn': True,
         'batch_size': 512,
         'test_val_batch_size': 1024,
         'epochs': 1,
@@ -120,12 +119,12 @@ def load_config():
         'embedding_size': 10,
         'dropout': None,  # 长度为deep layers长度+1
         'deep_layers': [128, 128],
-        'embeddings_initializer': tf.random_uniform_initializer(-0.1, 0.1),
-        'kernel_initializer': tf.random_uniform_initializer(-0.1, 0.1),
+        'embeddings_initializer': tf.keras.initializers.TruncatedNormal(),
+        'kernel_initializer': tf.keras.initializers.TruncatedNormal(),
         'verbose': 100,
         'random_seed': 2020,
         'l2_reg': 1,
         'use_bn': True,
-        'cin_layers' : [64,64,64]
+        'cin_layers' : [128,128,128]
     }
     return params

@@ -21,7 +21,7 @@ import tqdm
 import itertools
 class xdeepfm(tf.keras.models.Model):
     def __init__(self, label_dict, label_len_dict,label_col,
-                 features,use_fgcn = False,batch_size=256,test_val_batch_size = 256,
+                 features,batch_size=256,test_val_batch_size = 256,
                  epochs = 1,
                  train_path = None,early_stop=False,
                  early_stop_round=3,eval_path=None,
@@ -43,7 +43,6 @@ class xdeepfm(tf.keras.models.Model):
         self.label_len_dict = label_len_dict
         self.label_col = label_col
         self.features = features
-        self.use_fgcn = use_fgcn
         self.train_path = train_path
         self.early_stop = early_stop
         self.early_stop_round = early_stop_round
@@ -99,7 +98,7 @@ class xdeepfm(tf.keras.models.Model):
 
         self.cin_conv = []
         for i in range(len(self.cin_layers)):
-            self.cin_conv.append(tf.keras.layers.Conv1D(filters=self.cin_layers[i], kernel_size=1,strides=1, padding='VALID',activation='relu'))
+            self.cin_conv.append(tf.keras.layers.Conv1D(filters=self.cin_layers[i], kernel_size=1,strides=1, padding='VALID',activation='relu',use_bias=False))
 
         if self.dropout:
             self.drop_out = []
@@ -120,17 +119,6 @@ class xdeepfm(tf.keras.models.Model):
         self.dense_lr_out = tf.keras.layers.Dense(1, kernel_initializer=self.kernel_initializer)
         self.dense_cin_out = tf.keras.layers.Dense(1, kernel_initializer=self.kernel_initializer)
         self.dense_dnn_out = tf.keras.layers.Dense(1, kernel_initializer=self.kernel_initializer)
-        # # FGCN part
-        # if self.use_fgcn:
-        #     self.FGCN = FGCNlayer(filed_size=len(self.label_dict.keys()),embedding_size = self.embedding_size)
-        #     # fgcn
-        #     self.emb_fgcn = {}
-        #     for i in label_len_dict.keys():
-        #         self.emb_fgcn[i] = tf.keras.layers.Embedding(input_dim=max(self.label_len_dict[i])+1,output_dim=self.embedding_size,
-        #                                                    embeddings_initializer = self.embeddings_initializer)
-
-
-
 
     # @tf.function
     def call(self, inputs, training=None):
@@ -170,7 +158,6 @@ class xdeepfm(tf.keras.models.Model):
             dnn_out = self.drop_out[0](dnn_out,training = training)
 
         for i in  range(len(self.deep_layers)):
-            # y_deep_input = tf.matmul(y_deep_input,self.weights1["layer_%d" % i])
             dnn_out = self.dense[i](dnn_out)
             if self.use_bn:
                 dnn_out = self.batch_norm[i](dnn_out,training = training)
@@ -180,12 +167,10 @@ class xdeepfm(tf.keras.models.Model):
                 dnn_out = self.drop_out[i+1](dnn_out,training = training)
         dnn_out = self.dense_dnn_out(dnn_out)
 
-        # out = tf.concat([lr_out,dnn_out,cin_out],axis = 1)
-        # out = self.dense_out(out)
+
         out = lr_out+cin_out+dnn_out
         out = tf.nn.sigmoid(out)
         out = tf.reshape(out,shape=[-1])
-        # self.out = keras.layers.Activation('sigmoid', name='odm_mbox_conf_softmax')(self.out)
         return out
 
     def cinlayer(self,tensor_0,xk,xk_neuron,feature_map_num,index):
@@ -291,7 +276,7 @@ class xdeepfm(tf.keras.models.Model):
         self.train_data = self.train_data.batch(batch_size=self.batch_size)
         self.train_data = self.train_data.map(self.parse_record,
                                               num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        self.train_data = self.train_data.prefetch(buffer_size=6)
+        self.train_data = self.train_data.prefetch(buffer_size=20)
 
     def parse_record(self,record):
         return tf.io.parse_example(record, features=self.features)
