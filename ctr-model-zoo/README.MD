@@ -12,6 +12,10 @@ FGCNN 论文地址: [https://arxiv.org/pdf/1904.04447.pdf](https://arxiv.org/pdf
 
 数据地址: [https://www.kaggle.com/c/microsoft-malware-prediction/data](https://www.kaggle.com/c/microsoft-malware-prediction/data). 
 
+## 使用方式
+   - 运行说明：需要先将数据下载在任意目录,先运行data_sample.py,因为数据量比较大,电脑内存较小,前期测试使用的是随机采样部分数据,不需要可以取消掉.运行完后,对生成的csv进行编码等处理,使用csv_to_tfrecord.py,这个脚本也是分块处理,内存占用很小,运行完生成tfrecord格式文件,利用这个格式的文件节省内存并加速训练.这两个文件的输入输出需要设置好路径.然后运行main.py文件即可，调用任意NN模型,按需设置参数,训练预测即可,模型默认保存在同一文件夹model里面,同时生成竞赛的结果csv文件.
+
+
 ## 更新记录
    - 2020-02-17 新增模型.  
         * 新增了PNN,xDeepFM模型,FGCN layer提取特征.目前来看，模型起到的优化效果有限，AUC表现上面看，NFFM>=xDeepFM>PNN_FGCN>PNN,但是数值也都在1个百分点以内。
